@@ -115,7 +115,10 @@ where
         };
 
         // Add headers and body
-        let request = builder.header(CONTENT_TYPE, "application/json").body(body).unwrap(); // This is safe
+        let request = builder
+            .header(CONTENT_TYPE, "application/json")
+            .body(body)
+            .unwrap(); // This is safe
 
         // Send request
         let response = self.client.request(request).await?;
@@ -169,7 +172,10 @@ where
             }
         }
         // Match responses to the requests.
-        let results = requests.iter().map(|r| resp_by_id.remove(&HashableValue(&r.id))).collect();
+        let results = requests
+            .iter()
+            .map(|r| resp_by_id.remove(&HashableValue(&r.id)))
+            .collect();
 
         // Since we're also just producing the first duplicate ID, we can also just produce the
         // first incorrect ID in case there are multiple.
