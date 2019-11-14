@@ -5,6 +5,3 @@
 Forked from [rust-jsonrpc](https://github.com/apoelstra/rust-jsonrpc) to add async/await support.
 
 Rudimentary support for sending JSONRPC 2.0 requests and receiving responses.
-
-To send a request which should retrieve the above structure, consider the following
-example code
