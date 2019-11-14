@@ -22,7 +22,7 @@ use std::{error, fmt};
 use hyper;
 use serde_json;
 
-use Response;
+use crate::Response;
 
 /// A library error
 #[derive(Debug)]
@@ -97,7 +97,7 @@ impl error::Error for Error {
         }
     }
 
-    fn cause(&self) -> Option<&error::Error> {
+    fn cause(&self) -> Option<&dyn error::Error> {
         match *self {
             Error::Json(ref e) => Some(e),
             Error::Hyper(ref e) => Some(e),
@@ -143,7 +143,7 @@ pub enum StandardError {
     InternalError,
 }
 
-#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+#[derive(Clone, Debug, PartialEq, Deserialize)]
 /// A JSONRPC error object
 pub struct RpcError {
     /// The integer identifier of the error
@@ -160,27 +160,27 @@ pub fn standard_error(code: StandardError, data: Option<serde_json::Value>) -> R
         StandardError::ParseError => RpcError {
             code: -32700,
             message: "Parse error".to_string(),
-            data: data,
+            data,
         },
         StandardError::InvalidRequest => RpcError {
             code: -32600,
             message: "Invalid Request".to_string(),
-            data: data,
+            data,
         },
         StandardError::MethodNotFound => RpcError {
             code: -32601,
             message: "Method not found".to_string(),
-            data: data,
+            data,
         },
         StandardError::InvalidParams => RpcError {
             code: -32602,
             message: "Invalid params".to_string(),
-            data: data,
+            data,
         },
         StandardError::InternalError => RpcError {
             code: -32603,
             message: "Internal error".to_string(),
-            data: data,
+            data,
         },
     }
 }
@@ -194,13 +194,13 @@ pub fn result_to_response(
         Ok(data) => Response {
             result: Some(data),
             error: None,
-            id: id,
+            id,
             jsonrpc: Some(String::from("2.0")),
         },
         Err(err) => Response {
             result: None,
             error: Some(err),
-            id: id,
+            id,
             jsonrpc: Some(String::from("2.0")),
         },
     }
