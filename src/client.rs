@@ -40,12 +40,7 @@ pub struct Client<C> {
     nonce: Arc<Mutex<u64>>,
 }
 
-impl<C> Client<C>
-where
-    C: Connect + Sync + 'static,
-    C::Transport: 'static,
-    C::Future: 'static,
-{
+impl Client<HttpConnector> {
     /// Creates a new client
     pub fn new(url: String, user: Option<String>, pass: Option<String>) -> Client<HttpConnector> {
         // Check that if we have a password, we have a username; other way around is ok
@@ -59,7 +54,9 @@ where
             nonce: Arc::new(Mutex::new(0)),
         }
     }
+}
 
+impl Client<HttpsConnector<HttpConnector>> {
     /// Creates a new TLS client
     pub fn new_tls(
         url: String,
@@ -78,7 +75,14 @@ where
             nonce: Arc::new(Mutex::new(0)),
         })
     }
+}
 
+impl<C> Client<C>
+where
+    C: Connect + Sync + 'static,
+    C::Transport: 'static,
+    C::Future: 'static,
+{
     /// Make a request and deserialize the response
     pub async fn do_rpc<T: for<'a> serde::de::Deserialize<'a>>(
         &self,
