@@ -19,7 +19,7 @@
 //!
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use futures_util::TryStreamExt;
 use hyper::{
@@ -36,7 +36,7 @@ pub struct Client<C> {
     url: String,
     user: Option<String>,
     pass: Option<String>,
-    nonce: AtomicU64,
+    nonce: AtomicUsize,
     client: HyperClient<C, Body>,
 }
 
@@ -51,7 +51,7 @@ impl Client<HttpConnector> {
             user,
             pass,
             client: HyperClient::new(),
-            nonce: AtomicU64::new(0),
+            nonce: AtomicUsize::new(0),
         }
     }
 }
@@ -72,7 +72,7 @@ impl Client<HttpsConnector<HttpConnector>> {
             user,
             pass,
             client: https_client,
-            nonce: Arc::new(Mutex::new(0)),
+            nonce: AtomicUsize::new(0),
         })
     }
 }
@@ -202,7 +202,7 @@ where
     }
 
     /// Accessor for the next nonce
-    pub fn next_nonce(&self) -> u64 {
+    pub fn next_nonce(&self) -> usize {
         self.nonce.load(Ordering::SeqCst)
     }
 }
