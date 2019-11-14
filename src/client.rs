@@ -19,32 +19,36 @@
 //!
 
 use std::collections::HashMap;
-use std::io;
-use std::io::Read;
 use std::sync::{Arc, Mutex};
+use std::io::Read;
 
-use hyper;
-use hyper::client::Client as HyperClient;
-use hyper::header::{Authorization, Basic, ContentType, Headers};
-use serde;
-use serde_json;
+use hyper::{
+    client::{Client as HyperClient, HttpConnector, connect::Connect},
+    header::{AUTHORIZATION, CONTENT_TYPE},
+    Body,
+};
+use hyper_tls::{Error as TlsError, HttpsConnector};
+use futures_util::TryStreamExt;
 
-use super::{Request, Response};
-use util::HashableValue;
-use error::Error;
+use crate::{error::Error, util::HashableValue, Request, Response};
 
 /// A handle to a remote JSONRPC server
-pub struct Client {
+pub struct Client<C> {
     url: String,
     user: Option<String>,
     pass: Option<String>,
-    client: HyperClient,
+    client: HyperClient<C, Body>,
     nonce: Arc<Mutex<u64>>,
 }
 
-impl Client {
+impl<C> Client<C>
+where
+    C: Connect + Sync + 'static,
+    C::Transport: 'static,
+    C::Future: 'static,
+{
     /// Creates a new client
-    pub fn new(url: String, user: Option<String>, pass: Option<String>) -> Client {
+    pub fn new(url: String, user: Option<String>, pass: Option<String>) -> Client<HttpConnector> {
         // Check that if we have a password, we have a username; other way around is ok
         debug_assert!(pass.is_none() || user.is_some());
 
@@ -57,78 +61,68 @@ impl Client {
         }
     }
 
+    /// Creates a new TLS client
+    pub fn new_tls(
+        url: String,
+        user: Option<String>,
+        pass: Option<String>,
+    ) -> Result<Client<HttpsConnector<HttpConnector>>, TlsError> {
+        // Check that if we have a password, we have a username; other way around is ok
+        debug_assert!(pass.is_none() || user.is_some());
+        let https = HttpsConnector::new()?;
+        let https_client = HyperClient::builder().build::<_, Body>(https);
+        Ok(Client {
+            url: url,
+            user: user,
+            pass: pass,
+            client: https_client,
+            nonce: Arc::new(Mutex::new(0)),
+        })
+    }
+
     /// Make a request and deserialize the response
-    pub fn do_rpc<T: for<'a> serde::de::Deserialize<'a>>(
+    pub async fn do_rpc<T: for<'a> serde::de::Deserialize<'a>>(
         &self,
         rpc_name: &str,
         args: &[serde_json::value::Value],
     ) -> Result<T, Error> {
         let request = self.build_request(rpc_name, args);
-        let response = self.send_request(&request)?;
+        let response = self.send_request(&request).await?;
 
         Ok(response.into_result()?)
     }
 
     /// The actual send logic used by both [send_request] and [send_batch].
-    fn send_raw<B, R>(&self, body: &B) -> Result<R, Error>
+    async fn send_raw<B, R>(&self, body_raw: &B) -> Result<R, Error>
     where
         B: serde::ser::Serialize,
         R: for<'de> serde::de::Deserialize<'de>,
     {
-        // Build request
-        let request_raw = serde_json::to_vec(body)?;
+        let json_raw = serde_json::to_vec(body_raw).unwrap(); // This is safe
+        let body = Body::from(json_raw);
+        let mut builder = hyper::Request::post(&self.url);
 
-        // Setup connection
-        let mut headers = Headers::new();
-        headers.set(ContentType::json());
+        // Add authorization
         if let Some(ref user) = self.user {
-            headers.set(Authorization(Basic {
-                username: user.clone(),
-                password: self.pass.clone(),
-            }));
-        }
+            let pass_str = match &self.pass {
+                Some(some) => some,
+                None => "",
+            };
+            builder = builder.header(AUTHORIZATION, format!("Basic {}:{}", user, pass_str))
+        };
+        let request = builder.body(body).unwrap(); // This is safe
 
         // Send request
-        let retry_headers = headers.clone();
-        let hyper_request = self.client.post(&self.url).headers(headers).body(&request_raw[..]);
-        let mut stream = match hyper_request.send() {
-            Ok(s) => s,
-            // Hyper maintains a pool of TCP connections to its various clients,
-            // and when one drops it cannot tell until it tries sending. In this
-            // case the appropriate thing is to re-send, which will cause hyper
-            // to open a new connection. Jonathan Reem explained this to me on
-            // IRC, citing vague technical reasons that the library itself cannot
-            // do the retry transparently.
-            Err(hyper::error::Error::Io(e)) => {
-                if e.kind() == io::ErrorKind::BrokenPipe
-                    || e.kind() == io::ErrorKind::ConnectionAborted
-                {
-                    try!(self
-                        .client
-                        .post(&self.url)
-                        .headers(retry_headers)
-                        .body(&request_raw[..])
-                        .send()
-                        .map_err(Error::Hyper))
-                } else {
-                    return Err(Error::Hyper(hyper::error::Error::Io(e)));
-                }
-            }
-            Err(e) => {
-                return Err(Error::Hyper(e));
-            }
-        };
+        let response = self.client.request(request).await?;
+        let body = response.into_body().try_concat().await?;
+        let parsed: R = serde_json::from_slice(&body)?;
 
-        // nb we ignore stream.status since we expect the body
-        // to contain information about any error
-        let response: R = serde_json::from_reader(&mut stream)?;
-        stream.bytes().count(); // Drain the stream so it can be reused
-        Ok(response)
+        Ok(parsed)
     }
 
     /// Sends a request to a client
-    pub fn send_request(&self, request: &Request) -> Result<Response, Error> {
-        let response: Response = self.send_raw(&request)?;
+    pub async fn send_request(&self, request: &Request<'_, '_>) -> Result<Response, Error> {
+        let response: Response = self.send_raw(&request).await?;
         if response.jsonrpc != None && response.jsonrpc != Some(From::from("2.0")) {
             return Err(Error::VersionMismatch);
         }
@@ -143,14 +137,14 @@ impl Client {
     ///
     /// Note that the requests need to have valid IDs, so it is advised to create the requests
     /// with [build_request].
-    pub fn send_batch(&self, requests: &[Request]) -> Result<Vec<Option<Response>>, Error> {
+    pub async fn send_batch(&self, requests: &[Request<'_, '_>]) -> Result<Vec<Option<Response>>, Error> {
         if requests.len() < 1 {
             return Err(Error::EmptyBatch);
         }
 
         // If the request body is invalid JSON, the response is a single response object.
         // We ignore this case since we are confident we are producing valid JSON.
-        let responses: Vec<Response> = self.send_raw(&requests)?;
+        let responses: Vec<Response> = self.send_raw(&requests).await?;
         if responses.len() > requests.len() {
             return Err(Error::WrongBatchResponseSize);
         }

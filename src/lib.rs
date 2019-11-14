@@ -17,29 +17,14 @@
 //! Rust support for the JSON-RPC 2.0 protocol.
 //!
 
-#![crate_type = "lib"]
-#![crate_type = "rlib"]
-#![crate_type = "dylib"]
-#![crate_name = "jsonrpc"]
-// Coding conventions
-#![deny(non_upper_case_globals)]
-#![deny(non_camel_case_types)]
-#![deny(non_snake_case)]
-#![deny(unused_mut)]
-#![warn(missing_docs)]
-
-extern crate hyper;
-
-extern crate serde;
 #[macro_use]
-extern crate serde_derive;
-pub extern crate serde_json;
+extern crate serde;
 
 pub mod client;
 pub mod error;
 mod util;
 
-// Re-export error type
+pub use client::Client;
 pub use error::Error;
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -55,7 +40,7 @@ pub struct Request<'a, 'b> {
     pub jsonrpc: Option<&'a str>,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 /// A JSONRPC response object
 pub struct Response {
     /// A result if there is one, or null

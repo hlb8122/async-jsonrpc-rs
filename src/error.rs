@@ -22,7 +22,7 @@ use std::{error, fmt};
 use hyper;
 use serde_json;
 
-use Response;
+use crate::Response;
 
 /// A library error
 #[derive(Debug)]
@@ -143,7 +143,7 @@ pub enum StandardError {
     InternalError,
 }
 
-#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+#[derive(Clone, Debug, PartialEq, Deserialize)]
 /// A JSONRPC error object
 pub struct RpcError {
     /// The integer identifier of the error
