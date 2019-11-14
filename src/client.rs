@@ -20,15 +20,14 @@
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use std::io::Read;
 
+use futures_util::TryStreamExt;
 use hyper::{
-    client::{Client as HyperClient, HttpConnector, connect::Connect},
+    client::{connect::Connect, Client as HyperClient, HttpConnector},
     header::{AUTHORIZATION, CONTENT_TYPE},
     Body,
 };
 use hyper_tls::{Error as TlsError, HttpsConnector};
-use futures_util::TryStreamExt;
 
 use crate::{error::Error, util::HashableValue, Request, Response};
 
@@ -100,7 +99,7 @@ where
     {
         let json_raw = serde_json::to_vec(body_raw).unwrap(); // This is safe
         let body = Body::from(json_raw);
-        let mut builder = hyper::Request::post(&self.url);
+        let mut builder = &mut hyper::Request::post(&self.url);
 
         // Add authorization
         if let Some(ref user) = self.user {
@@ -110,7 +109,9 @@ where
             };
             builder = builder.header(AUTHORIZATION, format!("Basic {}:{}", user, pass_str))
         };
-        let request = builder.body(body).unwrap(); // This is safe
+
+        // Add headers and body
+        let request = builder.header(CONTENT_TYPE, "application/json").body(body).unwrap(); // This is safe
 
         // Send request
         let response = self.client.request(request).await?;
@@ -137,7 +138,10 @@ where
     ///
     /// Note that the requests need to have valid IDs, so it is advised to create the requests
     /// with [build_request].
-    pub async fn send_batch(&self, requests: &[Request<'_, '_>]) -> Result<Vec<Option<Response>>, Error> {
+    pub async fn send_batch(
+        &self,
+        requests: &[Request<'_, '_>],
+    ) -> Result<Vec<Option<Response>>, Error> {
         if requests.len() < 1 {
             return Err(Error::EmptyBatch);
         }

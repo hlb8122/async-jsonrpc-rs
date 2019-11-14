@@ -97,7 +97,7 @@ impl error::Error for Error {
         }
     }
 
-    fn cause(&self) -> Option<&error::Error> {
+    fn cause(&self) -> Option<&dyn error::Error> {
         match *self {
             Error::Json(ref e) => Some(e),
             Error::Hyper(ref e) => Some(e),
