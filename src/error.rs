@@ -160,27 +160,27 @@ pub fn standard_error(code: StandardError, data: Option<serde_json::Value>) -> R
         StandardError::ParseError => RpcError {
             code: -32700,
             message: "Parse error".to_string(),
-            data: data,
+            data,
         },
         StandardError::InvalidRequest => RpcError {
             code: -32600,
             message: "Invalid Request".to_string(),
-            data: data,
+            data,
         },
         StandardError::MethodNotFound => RpcError {
             code: -32601,
             message: "Method not found".to_string(),
-            data: data,
+            data,
         },
         StandardError::InvalidParams => RpcError {
             code: -32602,
             message: "Invalid params".to_string(),
-            data: data,
+            data,
         },
         StandardError::InternalError => RpcError {
             code: -32603,
             message: "Internal error".to_string(),
-            data: data,
+            data,
         },
     }
 }
@@ -194,13 +194,13 @@ pub fn result_to_response(
         Ok(data) => Response {
             result: Some(data),
             error: None,
-            id: id,
+            id,
             jsonrpc: Some(String::from("2.0")),
         },
         Err(err) => Response {
             result: None,
             error: Some(err),
-            id: id,
+            id,
             jsonrpc: Some(String::from("2.0")),
         },
     }

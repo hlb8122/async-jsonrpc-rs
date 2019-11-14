@@ -52,9 +52,9 @@ where
         debug_assert!(pass.is_none() || user.is_some());
 
         Client {
-            url: url,
-            user: user,
-            pass: pass,
+            url,
+            user,
+            pass,
             client: HyperClient::new(),
             nonce: Arc::new(Mutex::new(0)),
         }
@@ -71,9 +71,9 @@ where
         let https = HttpsConnector::new()?;
         let https_client = HyperClient::builder().build::<_, Body>(https);
         Ok(Client {
-            url: url,
-            user: user,
-            pass: pass,
+            url,
+            user,
+            pass,
             client: https_client,
             nonce: Arc::new(Mutex::new(0)),
         })
@@ -142,14 +142,14 @@ where
         &self,
         requests: &[Request<'_, '_>],
     ) -> Result<Vec<Option<Response>>, Error> {
-        if requests.len() < 1 {
+        if requests.is_empty() {
             return Err(Error::EmptyBatch);
         }
 
         // If the request body is invalid JSON, the response is a single response object.
         // We ignore this case since we are confident we are producing valid JSON.
         let responses: Vec<Response> = self.send_raw(&requests).await?;
-        if responses.len() > requests.len() {
+        if !responses.is_empty() {
             return Err(Error::WrongBatchResponseSize);
         }
 
@@ -165,8 +165,7 @@ where
             }
         }
         // Match responses to the requests.
-        let results =
-            requests.into_iter().map(|r| resp_by_id.remove(&HashableValue(&r.id))).collect();
+        let results = requests.iter().map(|r| resp_by_id.remove(&HashableValue(&r.id))).collect();
 
         // Since we're also just producing the first duplicate ID, we can also just produce the
         // first incorrect ID in case there are multiple.
@@ -180,14 +179,14 @@ where
     /// Builds a request
     pub fn build_request<'a, 'b>(
         &self,
-        name: &'a str,
+        method: &'a str,
         params: &'b [serde_json::Value],
     ) -> Request<'a, 'b> {
         let mut nonce = self.nonce.lock().unwrap();
         *nonce += 1;
         Request {
-            method: name,
-            params: params,
+            method,
+            params,
             id: From::from(*nonce),
             jsonrpc: Some("2.0"),
         }
