@@ -31,43 +31,35 @@ pub use client::Client;
 pub use error::Error;
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
-/// A JSONRPC request object
+/// Represents the JSONRPC request object.
 pub struct Request<'a, 'b> {
-    /// The name of the RPC call
     pub method: &'a str,
-    /// Parameters to the RPC call
     pub params: &'b [serde_json::Value],
-    /// Identifier for this Request, which should appear in the response
     pub id: serde_json::Value,
-    /// jsonrpc field, MUST be "2.0"
     pub jsonrpc: Option<&'a str>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
-/// A JSONRPC response object
+/// Represents the JSONRPC response object.
 pub struct Response {
-    /// A result if there is one, or null
     pub result: Option<serde_json::Value>,
-    /// An error if there is one, or null
     pub error: Option<error::RpcError>,
-    /// Identifier for this Request, which should match that of the request
     pub id: serde_json::Value,
-    /// jsonrpc field, MUST be "2.0"
     pub jsonrpc: Option<String>,
 }
 
 impl Response {
-    /// Extract the result from a response
+    /// Extract the result.
     pub fn result<T: serde::de::DeserializeOwned>(&self) -> Result<T, Error> {
-        if let Some(ref e) = self.error {
+        if let Some(e) = &self.error {
             return Err(Error::Rpc(e.clone()));
         }
 
-        serde_json::from_value(self.result.clone().unwrap_or(serde_json::Value::Null))
+        T::deserialize(self.result.as_ref().unwrap_or(&serde_json::Value::Null))
             .map_err(Error::Json)
     }
 
-    /// Extract the result from a response, consuming the response
+    /// Extract the result, consuming the response.
     pub fn into_result<T: serde::de::DeserializeOwned>(self) -> Result<T, Error> {
         if let Some(e) = self.error {
             return Err(Error::Rpc(e));
@@ -76,18 +68,19 @@ impl Response {
         serde_json::from_value(self.result.unwrap_or(serde_json::Value::Null)).map_err(Error::Json)
     }
 
-    /// Return the RPC error, if there was one, but do not check the result
-    pub fn check_error(self) -> Result<(), Error> {
-        if let Some(e) = self.error {
-            Err(Error::Rpc(e))
-        } else {
-            Ok(())
-        }
+    /// Returns the [`RpcError`].
+    pub fn error(self) -> Option<error::RpcError> {
+        self.error
     }
 
-    /// Returns whether or not the `result` field is empty
-    pub fn is_none(&self) -> bool {
-        self.result.is_none()
+    /// Returns `true` if the result field is [`Some`] value.
+    pub fn is_result(&self) -> bool {
+        self.result.is_some()
+    }
+
+    /// Returns `true` if the error field is [`Some`] value.
+    pub fn is_error(&self) -> bool {
+        self.error.is_some()
     }
 }
 
@@ -113,8 +106,8 @@ mod tests {
             jsonrpc: Some(String::from("2.0")),
         };
 
-        assert!(!joanna.is_none());
-        assert!(bill.is_none());
+        assert!(joanna.is_error());
+        assert!(bill.is_error());
     }
 
     #[test]

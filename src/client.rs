@@ -31,7 +31,7 @@ use hyper_tls::{Error as TlsError, HttpsConnector};
 
 use crate::{error::Error, util::HashableValue, Request, Response};
 
-/// A handle to a remote JSONRPC server
+/// A handle to a remote JSONRPC server.
 pub struct Client<C> {
     url: String,
     user: Option<String>,
@@ -41,7 +41,7 @@ pub struct Client<C> {
 }
 
 impl Client<HttpConnector> {
-    /// Creates a new client
+    /// Creates a new client.
     pub fn new(url: String, user: Option<String>, pass: Option<String>) -> Client<HttpConnector> {
         // Check that if we have a password, we have a username; other way around is ok
         debug_assert!(pass.is_none() || user.is_some());
@@ -57,7 +57,7 @@ impl Client<HttpConnector> {
 }
 
 impl Client<HttpsConnector<HttpConnector>> {
-    /// Creates a new TLS client
+    /// Creates a new TLS client.
     pub fn new_tls(
         url: String,
         user: Option<String>,
@@ -83,7 +83,7 @@ where
     C::Transport: 'static,
     C::Future: 'static,
 {
-    /// Make a request and deserialize the response
+    /// Make a request and deserialize the response.
     pub async fn do_rpc<T: for<'a> serde::de::Deserialize<'a>>(
         &self,
         rpc_name: &str,
@@ -95,7 +95,7 @@ where
         Ok(response.into_result()?)
     }
 
-    /// The actual send logic used by both [send_request] and [send_batch].
+    /// The actual send logic used by both [send_request] and [send_batch]
     async fn send_raw<B, R>(&self, body_raw: &B) -> Result<R, Error>
     where
         B: serde::ser::Serialize,
@@ -128,7 +128,7 @@ where
         Ok(parsed)
     }
 
-    /// Sends a request to a client
+    /// Send a request to a client.
     pub async fn send_request(&self, request: &Request<'_, '_>) -> Result<Response, Error> {
         let response: Response = self.send_raw(&request).await?;
         if response.jsonrpc != None && response.jsonrpc != Some(From::from("2.0")) {
@@ -140,7 +140,7 @@ where
         Ok(response)
     }
 
-    /// Sends a batch of requests to the client.  The return vector holds the response
+    /// Send a batch of requests to the client.  The return vector holds the response
     /// for the request at the corresponding index.  If no response was provided, it's [None].
     ///
     /// Note that the requests need to have valid IDs, so it is advised to create the requests
@@ -164,21 +164,23 @@ where
         // them easily. IDs can only be of JSON type String or Number (or Null), so cloning
         // should be inexpensive and require no allocations as Numbers are more common.
         let ids: Vec<serde_json::Value> = responses.iter().map(|r| r.id.clone()).collect();
-        // First index responses by ID and catch duplicate IDs.
+
+        // First index responses by ID and catch duplicate IDs
         let mut resp_by_id = HashMap::new();
         for (id, resp) in ids.iter().zip(responses.into_iter()) {
             if let Some(dup) = resp_by_id.insert(HashableValue(&id), resp) {
                 return Err(Error::BatchDuplicateResponseId(dup.id));
             }
         }
-        // Match responses to the requests.
+
+        // Match responses to the requests
         let results = requests
             .iter()
             .map(|r| resp_by_id.remove(&HashableValue(&r.id)))
             .collect();
 
         // Since we're also just producing the first duplicate ID, we can also just produce the
-        // first incorrect ID in case there are multiple.
+        // first incorrect ID in case there are multiple
         if let Some(incorrect) = resp_by_id.into_iter().nth(0) {
             return Err(Error::WrongBatchResponseId(incorrect.1.id));
         }
@@ -186,7 +188,7 @@ where
         Ok(results)
     }
 
-    /// Builds a request
+    /// Build a request.
     pub fn build_request<'a, 'b>(
         &self,
         method: &'a str,
@@ -201,7 +203,7 @@ where
         }
     }
 
-    /// Accessor for the next nonce
+    /// Return the next nonce.
     pub fn next_nonce(&self) -> usize {
         self.nonce.load(Ordering::SeqCst)
     }

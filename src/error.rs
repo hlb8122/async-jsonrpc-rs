@@ -24,26 +24,26 @@ use serde_json;
 
 use crate::Response;
 
-/// A library error
+/// The error type for RPCs.
 #[derive(Debug)]
 pub enum Error {
-    /// Json error
+    /// An error occured during respnse JSON deserialization.
     Json(serde_json::Error),
-    /// Client error
+    /// A connection error occured.
     Hyper(hyper::error::Error),
-    /// Error response
+    /// The RPC returned an error.
     Rpc(RpcError),
-    /// Response to a request did not have the expected nonce
+    /// The response did not have the expected nonce.
     NonceMismatch,
-    /// Response to a request had a jsonrpc field other than "2.0"
+    /// The response had a jsonrpc field other than "2.0".
     VersionMismatch,
-    /// Batches can't be empty
+    /// Batches can't be empty.
     EmptyBatch,
-    /// Too many responses returned in batch
+    /// Too many responses returned in batch.
     WrongBatchResponseSize,
-    /// Batch response contained a duplicate ID
+    /// The batch response contained a duplicate ID.
     BatchDuplicateResponseId(serde_json::Value),
-    /// Batch response contained an ID that didn't correspond to any request ID
+    /// The batch response contained an ID that didn't correspond to any request ID.
     WrongBatchResponseId(serde_json::Value),
 }
 
@@ -135,7 +135,7 @@ pub enum StandardError {
     ParseError,
     /// The JSON sent is not a valid Request object.
     InvalidRequest,
-    /// The method does not exist / is not available.
+    /// The method does not exist or is not available.
     MethodNotFound,
     /// Invalid method parameter(s).
     InvalidParams,
@@ -144,17 +144,17 @@ pub enum StandardError {
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
-/// A JSONRPC error object
+/// A JSONRPC error object.
 pub struct RpcError {
-    /// The integer identifier of the error
+    /// The integer identifier of the error.
     pub code: i32,
-    /// A string describing the error
+    /// A string describing the error.
     pub message: String,
     /// Additional data specific to the error
     pub data: Option<serde_json::Value>,
 }
 
-/// Create a standard error responses
+/// Create a standard error responses.
 pub fn standard_error(code: StandardError, data: Option<serde_json::Value>) -> RpcError {
     match code {
         StandardError::ParseError => RpcError {
@@ -185,7 +185,7 @@ pub fn standard_error(code: StandardError, data: Option<serde_json::Value>) -> R
     }
 }
 
-/// Converts a Rust `Result` to a JSONRPC response object
+/// Converts a Rust `Result` to a JSONRPC response object.
 pub fn result_to_response(
     result: Result<serde_json::Value, RpcError>,
     id: serde_json::Value,
